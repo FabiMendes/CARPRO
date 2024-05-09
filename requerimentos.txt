@@ -1,0 +1,4 @@
+flask - ok
+flask_sqlalchemy - ok
+mysql-conector-python - ok
+mysqlclient - ok
