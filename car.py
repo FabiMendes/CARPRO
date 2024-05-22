@@ -16,7 +16,7 @@ class Carro(Base):
 
     placa = Column('PLACA', String, primary_key=True) #coluna para a placa de carros
     nome = Column('NOME', String) #nome do carro
-    disponibilidade = Column('DISPONIBILIDADE', Boolean, default=True) #disponibilidade do car
+    disponibilidade = Column('DISPONIBILIDADE', Integer, default=1) #disponibilidade do car 1 p sim e 0 p n
     marca = Column('MARCA', String) #marca do carro
 
 #relacionamento da tabela aluguel com carro
@@ -97,62 +97,92 @@ def calcular_preco(dias):
     preco_dia = 100
     return preco_dia * dias
 
+def excluir_cliente(doc):
+    try:
+        cliente = session.query(Cliente).filter_by(doc=doc).first()
+        if cliente:
+            session.delete(cliente)
+            session.commit()
+            print(f"Cliente com documento {doc} excluído com sucesso!")
+        else:
+            print("Cliente não encontrado.")
+    except Exception as e:
+        print(f"Erro ao excluir cliente: {e}")
+        session.rollback()
+
+def excluir_carro(placa):
+    try:
+        carro = session.query(Carro).filter_by(placa=placa).first()
+        if carro:
+            session.delete(carro)
+            session.commit()
+            print(f"Carro com placa {placa} excluído com sucesso!")
+        else:
+            print("Carro não encontrado.")
+    except Exception as e:
+        print(f"Erro ao excluir carro: {e}")
+        session.rollback()
+        
+def alterar_nome_cliente(doc, novo_nome):
+    try:
+        cliente = session.query(Cliente).filter_by(doc=doc).first()
+        if cliente:
+            cliente.nomecliente = novo_nome
+            session.commit()
+            print(f"Nome do cliente com documento {doc} alterado para {novo_nome} com sucesso!")
+        else:
+            print("Cliente não encontrado.")
+    except Exception as e:
+        print(f"Erro ao alterar nome do cliente: {e}")
+        session.rollback()
+
 def consulta_geral():
     try:
         # Consulta todos os clientes, carros e aluguéis na sessão
         clientes = session.query(Cliente).all()
         carros = session.query(Carro).all()
         alugueis = session.query(Aluguel).all()
+        for carro in carros:
+            print(f"Carro: {carro.placa}, Disponibilidade: {'Disponível' if carro.disponibilidade == 1 else 'Indisponível'}")
+
         return {
-            # Retorna um dicionário contendo as listas de clientes, carros e aluguéis
             "clientes": clientes,
             "carros": carros,
             "alugueis": alugueis
         }
     except Exception as e:
         print(f"Erro na consulta geral: {e}")
-        # se der ruim, vemm uma mensagem de erro e retorna None
         return None
 
 def alugar_carro(cliente_id, carro_id, dias):
     try:
-        # vê o cliente e o carro na sessão
         cliente = session.query(Cliente).filter_by(doc=cliente_id).first()
         carro = session.query(Carro).filter_by(placa=carro_id).first()
-         # olha se o cliente e o carro existem
         if cliente and carro:
-            if carro.disponibilidade: # olha se o carro está disponível para aluguel
-                novo_aluguel = Aluguel( # calcula o valor do aluguel multiplicados pelos dias fornecidos
-                    dias=dias, 
-                    valor=calcular_preco(dias),
-                    cliente_id=cliente.doc, 
-                    carro_id=carro_id
-                )
-                carro.disponibilidade = False # altera o carro p indisponível
-                cliente.qntd += 1  # muda a quantidade de aluguéis do cliente
-                session.add(novo_aluguel) # coloca o novo aluguel à sessão
+            if carro.disponibilidade == 1:
+                novo_aluguel = Aluguel(dias=dias, valor=calcular_preco(dias), cliente_id=cliente.doc, carro_id=carro_id)
+                carro.disponibilidade = 0  # Marca como indisponível
+                cliente.qntd += 1
+                session.add(novo_aluguel)
                 session.commit()
-                # traz uma mensagem de sucesso
                 print(f"Carro da placa {carro_id} alugado para o cliente {cliente_id} por {dias} dias. Valor total: {novo_aluguel.valor}")
             else:
                 print('O carro já está alugado')
         else:
             print("Aluguel não pode ser realizado. Verifique se o cliente e o carro existem e se o carro está disponível.")
-    except Exception as e: #se der erro
+    except Exception as e:
         print(f"Erro ao alugar carro: {e}")
         session.rollback()
 
 #def da func para devolver um carro alugado por um cliente
 def devolver_carro(cliente_id, carro_id):
-    try: #olha se o aluguel correspondente ao cliente e ao carro na sessão
-        aluguel = session.query(Aluguel).filter_by(cliente_id=cliente_id, carro_id=carro_id).first() # vê se o aluguel existe
-        if aluguel: # consulta o carro na sessão e marca como disponível
+    try:
+        aluguel = session.query(Aluguel).filter_by(cliente_id=cliente_id, carro_id=carro_id).first()
+        if aluguel:
             carro = session.query(Carro).filter_by(placa=carro_id).first()
-            carro.disponibilidade = True
-            # consulta o cliente e atualiza a quantidade de aluguéis
+            carro.disponibilidade = 1  # Marca como disponível
             cliente = session.query(Cliente).filter_by(doc=cliente_id).first()
             cliente.qntd -= 1
-            # tira o aluguel da sessão
             session.delete(aluguel)
             session.commit()
             print(f"Carro de placa {carro_id} devolvido pelo cliente {cliente_id}.")
@@ -161,7 +191,6 @@ def devolver_carro(cliente_id, carro_id):
     except Exception as e:
         print(f"Erro ao devolver carro: {e}")
         session.rollback()
-
 def menu_cliente():
     while True:
         user_icon = """\n_👤_"""
@@ -201,7 +230,11 @@ def menu_prestador():
         print("2. Cadastrar Carro")
         print("3. Consultar Cliente")
         print("4. Consultar Carro")
-        print("5. Sair")
+        print("5. Excluir Cliente")
+        print("6. Excluir Carro")
+        print("7. Alterar Nome do Cliente")
+        print("8. Sair")
+
     
         opcao = input("Escolha uma opção: ")
 
@@ -217,7 +250,7 @@ def menu_prestador():
             try:
                 placa = input('Placa: ')
                 nome = input('Nome: ')
-                disponibilidade = input('Disponibilidade (True/False): ') == 'True'
+                disponibilidade = int(input('Disponibilidade (1 para disponível, 0 para indisponível): '))
                 marca = input('Marca: ')
                 cadastrar_carro(placa, nome, marca, disponibilidade)
             except ValueError:
@@ -237,10 +270,29 @@ def menu_prestador():
             except Exception as e:
                 print(f"Erro ao consultar carros: {e}")
         elif opcao == "5":
+            try:
+                doc = int(input('Documento do Cliente a ser excluído: '))
+                excluir_cliente(doc)
+            except ValueError:
+                print("Entrada inválida. O documento deve ser um número.")
+        elif opcao == "6":
+            try:
+                placa = input('Placa do Carro a ser excluído: ')
+                excluir_carro(placa)
+            except ValueError:
+                print("Entrada inválida.")
+        elif opcao == "7":
+            try:
+                doc = int(input('Documento do Cliente: '))
+                novo_nome = input('Novo nome: ')
+                alterar_nome_cliente(doc, novo_nome)
+            except ValueError:
+                print("Entrada inválida.")
+        elif opcao == "8":
             break
         else:
             print("Opção inválida, tente novamente.")
-
+            
 def menu_principal():
     while True:
         print("" + text2art("CARPRO"))
